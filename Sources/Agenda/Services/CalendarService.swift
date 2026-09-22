@@ -127,7 +127,11 @@ final class CalendarService: ObservableObject {
             object: store,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            // queue: .main above guarantees we're already on the main
+            // actor here, so assumeIsolated avoids spawning a Task
+            // (which would otherwise trip Swift's concurrency checker
+            // on the weakly-captured self).
+            MainActor.assumeIsolated {
                 self?.refreshCalendars()
                 self?.reloadCurrentRange()
             }

@@ -46,11 +46,19 @@ première fois, macOS/iOS demandera l'autorisation d'accéder au
 calendrier — accepte-la pour voir tes calendriers existants apparaître
 en couleurs.
 
+## Interactions sur la timeline (vue Jour)
+
+- **Glisser sur une plage vide** : crée une nouvelle activité.
+- **Glisser un bloc existant** : le déplace dans le temps (rond aux
+  15 minutes).
+- **Glisser la petite poignée en bas d'un bloc** : redimensionne sa
+  durée (rond aux 15 minutes, 15 min minimum).
+- **Tap sur un bloc** : ouvre le formulaire d'édition.
+
 ## Pistes d'évolution
 
-- Glisser pour **déplacer/redimensionner** un bloc existant (aujourd'hui
-  seule la création par glissé est câblée ; modifier passe par le
-  formulaire).
+- Mêmes gestes de déplacement/redimensionnement dans la vue Semaine
+  (pour l'instant réservés à la vue Jour).
 - Vue **Mois**.
 - Widgets iOS/macOS (aperçu du jour).
 - Catégories/tags internes en plus des calendriers (actuellement la

@@ -8,6 +8,13 @@ struct DayView: View {
 
     @State private var dragAnchor: Date?
     @State private var dragCurrent: Date?
+    @State private var moveDrag: ActiveDrag?
+    @State private var resizeDrag: ActiveDrag?
+
+    private struct ActiveDrag {
+        let eventID: String
+        var translation: CGFloat
+    }
 
     private var events: [EKEvent] {
         calendarService.events(on: day)
@@ -23,15 +30,35 @@ struct DayView: View {
                             .padding(.trailing)
 
                         ForEach(events, id: \.eventIdentifier) { event in
+                            let isMoving = moveDrag?.eventID == event.eventIdentifier
+                            let isResizing = resizeDrag?.eventID == event.eventIdentifier
                             ActivityBlockView(
                                 event: event,
                                 color: calendarService.color(for: event.calendar),
-                                compact: false
-                            ) {
-                                planner.beginEditing(event)
-                            }
+                                compact: false,
+                                showsResizeHandle: true,
+                                resizeDelta: isResizing ? resizeDrag!.translation : 0,
+                                onTap: {
+                                    planner.beginEditing(event)
+                                },
+                                onMoveChanged: { translation in
+                                    moveDrag = ActiveDrag(eventID: event.eventIdentifier, translation: translation)
+                                },
+                                onMoveEnded: { translation in
+                                    commitMove(event: event, translation: translation)
+                                    moveDrag = nil
+                                },
+                                onResizeChanged: { translation in
+                                    resizeDrag = ActiveDrag(eventID: event.eventIdentifier, translation: translation)
+                                },
+                                onResizeEnded: { translation in
+                                    commitResize(event: event, translation: translation)
+                                    resizeDrag = nil
+                                }
+                            )
                             .padding(.trailing, 8)
-                            .offset(y: TimelineMetrics.yOffset(for: max(event.startDate, day)))
+                            .offset(y: TimelineMetrics.yOffset(for: max(event.startDate, day)) + (isMoving ? moveDrag!.translation : 0))
+                            .animation(.interactiveSpring(), value: isMoving)
                         }
 
                         if let dragAnchor, let dragCurrent {
@@ -85,6 +112,34 @@ struct DayView: View {
         let minutes = max(0, min(24 * 60, y / TimelineMetrics.hourHeight * 60))
         let date = day.startOfDay.addingTimeInterval(TimeInterval(minutes * 60))
         return date.roundedToNearest(minutes: 15)
+    }
+
+    private func commitMove(event: EKEvent, translation: CGFloat) {
+        let deltaMinutes = Double(translation / TimelineMetrics.hourHeight * 60)
+        let newStart = event.startDate.addingTimeInterval(deltaMinutes * 60).roundedToNearest(minutes: 15)
+        guard newStart != event.startDate else { return }
+        let duration = event.endDate.timeIntervalSince(event.startDate)
+        let newEnd = newStart.addingTimeInterval(duration)
+        do {
+            try calendarService.update(event, title: event.title ?? "", start: newStart, end: newEnd, calendar: event.calendar)
+            Haptics.success()
+        } catch {
+            // Best-effort: the block will snap back on the next refresh.
+        }
+    }
+
+    private func commitResize(event: EKEvent, translation: CGFloat) {
+        let deltaMinutes = Double(translation / TimelineMetrics.hourHeight * 60)
+        var newEnd = event.endDate.addingTimeInterval(deltaMinutes * 60).roundedToNearest(minutes: 15)
+        let minimumEnd = event.startDate.addingTimeInterval(15 * 60)
+        if newEnd < minimumEnd { newEnd = minimumEnd }
+        guard newEnd != event.endDate else { return }
+        do {
+            try calendarService.update(event, title: event.title ?? "", start: event.startDate, end: newEnd, calendar: event.calendar)
+            Haptics.success()
+        } catch {
+            // Best-effort: the block will snap back on the next refresh.
+        }
     }
 }
 

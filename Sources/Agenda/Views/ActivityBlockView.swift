@@ -7,23 +7,39 @@ import AppKit
 #endif
 
 /// A single colored activity on the timeline — the core "visual, at a
-/// glance" unit of the whole app.
+/// glance" unit of the whole app. Supports dragging to move (whole
+/// block) and dragging the bottom handle to resize.
 struct ActivityBlockView: View {
     let event: EKEvent
     let color: Color
     let compact: Bool
+    var showsResizeHandle: Bool = false
+    var resizeDelta: CGFloat = 0
     var onTap: () -> Void
+    var onMoveChanged: (CGFloat) -> Void = { _ in }
+    var onMoveEnded: (CGFloat) -> Void = { _ in }
+    var onResizeChanged: (CGFloat) -> Void = { _ in }
+    var onResizeEnded: (CGFloat) -> Void = { _ in }
+
+    private var baseHeight: CGFloat {
+        let minutes = event.endDate.timeIntervalSince(event.startDate) / 60
+        return CGFloat(minutes) / 60 * TimelineMetrics.hourHeight
+    }
 
     private var height: CGFloat {
-        let minutes = event.endDate.timeIntervalSince(event.startDate) / 60
-        return max(CGFloat(minutes) / 60 * TimelineMetrics.hourHeight, 22)
+        max(baseHeight + resizeDelta, 22)
+    }
+
+    /// While resizing, reflects the live end time so the label updates
+    /// as you drag — otherwise just the event's real end time.
+    private var displayEnd: Date {
+        guard resizeDelta != 0 else { return event.endDate }
+        let minutes = Double(height) / Double(TimelineMetrics.hourHeight) * 60
+        return event.startDate.addingTimeInterval(minutes * 60)
     }
 
     var body: some View {
-        Button(action: {
-            Haptics.tap()
-            onTap()
-        }) {
+        ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title ?? "Sans titre")
                     .font(.caption.weight(.semibold))
@@ -44,12 +60,34 @@ struct ActivityBlockView: View {
             )
             .foregroundStyle(color.isLight ? Color.black.opacity(0.85) : .white)
             .shadow(color: color.opacity(0.35), radius: 3, y: 2)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                Haptics.tap()
+                onTap()
+            }
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { onMoveChanged($0.translation.height) }
+                    .onEnded { onMoveEnded($0.translation.height) }
+            )
+
+            if showsResizeHandle {
+                Capsule()
+                    .fill(Color.white.opacity(0.5))
+                    .frame(width: 26, height: 4)
+                    .padding(.bottom, 3)
+                    .contentShape(Rectangle().inset(by: -8))
+                    .gesture(
+                        DragGesture(minimumDistance: 2)
+                            .onChanged { onResizeChanged($0.translation.height) }
+                            .onEnded { onResizeEnded($0.translation.height) }
+                    )
+            }
         }
-        .buttonStyle(.plain)
     }
 
     private var timeRangeText: String {
-        "\(event.startDate.formatted("HH:mm")) – \(event.endDate.formatted("HH:mm"))"
+        "\(event.startDate.formatted("HH:mm")) – \(displayEnd.formatted("HH:mm"))"
     }
 }
 
